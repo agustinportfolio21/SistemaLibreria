@@ -5,312 +5,408 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Librería Santo Tomás | Sistema de Gestión</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-  <!-- ENCABEZADO -->
-  <header class="app-header">
-    <div class="header-content">
-      <div class="brand">
-        <div class="brand-logo">ST</div>
-        <div class="brand-text">
-          <h1>Librería Santo Tomás</h1>
-          <span>Sistema de Gestión</span>
-        </div>
+  <!-- ==================== PANTALLA DE LOGIN ==================== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-logo-large">ST</div>
+        <h1>Librería Santo Tomás</h1>
+        <p>Sistema de Gestión</p>
       </div>
-      <div class="header-right">
-        <div class="header-date" id="headerDate"></div>
-        <div class="header-user" id="headerUser" style="display:none;">
-          <span class="user-email" id="userEmail"></span>
-          <button id="logoutBtn" class="btn btn-ghost btn-sm">Cerrar sesión</button>
+
+      <form id="loginForm" class="login-form">
+        <div class="field">
+          <label for="loginUser">Usuario</label>
+          <input type="text" id="loginUser" required autocomplete="username" placeholder="Ingresa tu usuario">
         </div>
-        <button id="googleSignInBtn" class="btn btn-primary btn-sm" style="display:none;">
-          Iniciar sesión con Google
+        <div class="field">
+          <label for="loginPass">Contraseña</label>
+          <input type="password" id="loginPass" required autocomplete="current-password" placeholder="Ingresa tu contraseña">
+        </div>
+        <p id="loginError" class="login-error"></p>
+        <button type="submit" class="btn btn-primary btn-large">Ingresar</button>
+      </form>
+
+      <div class="login-footer">
+        <p class="login-hint">
+          <strong>Primer uso:</strong> crea tu usuario y contraseña.<br>
+          Se guardarán en esta computadora.
+        </p>
+        <button type="button" id="setupFirstTimeBtn" class="btn-link">
+          ¿Primera vez? Crear cuenta
         </button>
       </div>
     </div>
-  </header>
+  </div>
 
-  <!-- NAVEGACIÓN POR PESTAÑAS -->
-  <nav class="tabs-nav">
-    <button class="tab-btn active" data-tab="dashboard">
-      <span class="tab-icon">▦</span> Panel
-    </button>
-    <button class="tab-btn" data-tab="productos">
-      <span class="tab-icon">▤</span> Productos
-    </button>
-    <button class="tab-btn" data-tab="ventas">
-      <span class="tab-icon">▸</span> Ventas
-    </button>
-    <button class="tab-btn" data-tab="historial">
-      <span class="tab-icon">◷</span> Historial
-    </button>
-  </nav>
+  <!-- ==================== APLICACIÓN PRINCIPAL ==================== -->
+  <div id="appContainer" style="display:none;">
 
-  <main class="app-main">
-
-    <!-- ==================== PESTAÑA: PANEL ==================== -->
-    <section class="tab-content active" id="tab-dashboard">
-      <div class="section-header">
-        <h2>Panel Principal</h2>
-        <p>Busca productos y revisa el estado general de tu librería</p>
-      </div>
-
-      <!-- BUSCADOR PRINCIPAL -->
-      <div class="panel search-panel">
-        <div class="search-hero">
-          <div class="search-input-wrapper">
-            <span class="search-icon">⌕</span>
-            <input
-              type="text"
-              id="panelSearchInput"
-              placeholder="Buscar por nombre, ID o categoría..."
-              autocomplete="off"
-            >
-            <button type="button" class="search-clear" id="panelSearchClear" title="Limpiar">×</button>
+    <!-- ENCABEZADO -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="brand-logo">ST</div>
+          <div class="brand-text">
+            <h1>Librería Santo Tomás</h1>
+            <span>Sistema de Gestión</span>
           </div>
-          <div class="search-hint">Presiona <kbd>Esc</kbd> para limpiar la búsqueda</div>
         </div>
-        <div class="category-chips" id="categoryChips"></div>
+        <div class="header-right">
+          <div class="header-date" id="headerDate"></div>
+          <div class="header-user">
+            <span class="user-email" id="userDisplay"></span>
+            <button id="logoutBtn" class="btn btn-ghost btn-sm">Cerrar sesión</button>
+          </div>
+        </div>
       </div>
+    </header>
 
-      <!-- RESULTADOS DE BÚSQUEDA -->
-      <div id="searchResultsWrapper" style="display:none;">
+    <!-- NAVEGACIÓN POR PESTAÑAS -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="dashboard">
+        <span class="tab-icon">▦</span> Panel
+      </button>
+      <button class="tab-btn" data-tab="productos">
+        <span class="tab-icon">▤</span> Productos
+      </button>
+      <button class="tab-btn" data-tab="ventas">
+        <span class="tab-icon">▸</span> Ventas
+      </button>
+      <button class="tab-btn" data-tab="historial">
+        <span class="tab-icon">◷</span> Historial
+      </button>
+      <button class="tab-btn" data-tab="ajustes">
+        <span class="tab-icon">⚙</span> Ajustes
+      </button>
+    </nav>
+
+    <main class="app-main">
+
+      <!-- ==================== PESTAÑA: PANEL ==================== -->
+      <section class="tab-content active" id="tab-dashboard">
+        <div class="section-header">
+          <h2>Panel Principal</h2>
+          <p>Busca productos y revisa el estado general de tu librería</p>
+        </div>
+
+        <!-- BUSCADOR PRINCIPAL -->
+        <div class="panel search-panel">
+          <div class="search-hero">
+            <div class="search-input-wrapper">
+              <span class="search-icon">⌕</span>
+              <input
+                type="text"
+                id="panelSearchInput"
+                placeholder="Buscar por nombre, ID o categoría..."
+                autocomplete="off"
+              >
+              <button type="button" class="search-clear" id="panelSearchClear" title="Limpiar">×</button>
+            </div>
+            <div class="search-hint">Presiona <kbd>Esc</kbd> para limpiar la búsqueda</div>
+          </div>
+          <div class="category-chips" id="categoryChips"></div>
+        </div>
+
+        <!-- RESULTADOS DE BÚSQUEDA -->
+        <div id="searchResultsWrapper" style="display:none;">
+          <div class="panel">
+            <div class="table-header">
+              <h3 id="searchResultsTitle">Resultados</h3>
+              <button class="btn btn-ghost" id="clearSearchBtn">Limpiar búsqueda</button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+          </div>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Productos</span>
+            <span class="stat-value" id="totalProductos">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Unidades en Stock</span>
+            <span class="stat-value" id="totalStock">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Valor del Inventario</span>
+            <span class="stat-value" id="valorInventario">$0</span>
+          </div>
+          <div class="stat-card highlight">
+            <span class="stat-label">Ganancias Totales</span>
+            <span class="stat-value" id="totalGanancias">$0</span>
+          </div>
+        </div>
+
+        <!-- RESUMEN MENSUAL -->
+        <div class="panel">
+          <h3>Resumen de Ventas del Mes</h3>
+          <div class="month-summary">
+            <div class="summary-item">
+              <span class="summary-label">Semana 1</span>
+              <span class="summary-value" id="week1Total">$0</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Semana 2</span>
+              <span class="summary-value" id="week2Total">$0</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Semana 3</span>
+              <span class="summary-value" id="week3Total">$0</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Semana 4</span>
+              <span class="summary-value" id="week4Total">$0</span>
+            </div>
+            <div class="summary-item total">
+              <span class="summary-label">Total del Mes</span>
+              <span class="summary-value" id="monthTotal">$0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-columns">
+          <div class="panel">
+            <h3>Productos con Bajo Stock</h3>
+            <div id="lowStockList" class="low-stock-list">
+              <p class="empty-msg">Sin alertas de stock</p>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Últimas Ventas</h3>
+            <div id="recentSalesList" class="recent-sales-list">
+              <p class="empty-msg">Sin ventas recientes</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== PESTAÑA: PRODUCTOS ==================== -->
+      <section class="tab-content" id="tab-productos">
+        <div class="section-header">
+          <h2>Gestión de Productos</h2>
+          <p>Administra el catálogo, precios y stock</p>
+        </div>
+
+        <div class="panel form-panel">
+          <h3 id="formTitle">Agregar Nuevo Producto</h3>
+          <form id="productForm">
+            <input type="hidden" id="productId">
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="nombre">Nombre del Producto *</label>
+                <input type="text" id="nombre" required placeholder="Ej: Cuaderno Rivadavia A4">
+              </div>
+              <div class="field">
+                <label for="categoria">Categoría</label>
+                <input type="text" id="categoria" placeholder="Ej: Cuadernos, Libros, Papelería">
+              </div>
+              <div class="field">
+                <label for="precioCompra">Precio de Compra *</label>
+                <input type="number" id="precioCompra" step="0.01" min="0" required placeholder="0.00">
+              </div>
+              <div class="field">
+                <label for="precioVenta">Precio de Venta *</label>
+                <input type="number" id="precioVenta" step="0.01" min="0" required placeholder="0.00">
+              </div>
+              <div class="field">
+                <label for="stock">Cantidad en Stock *</label>
+                <input type="number" id="stock" min="0" required placeholder="0">
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="submitBtn">Agregar Producto</button>
+              <button type="button" class="btn btn-ghost" id="cancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
         <div class="panel">
           <div class="table-header">
-            <h3 id="searchResultsTitle">Resultados</h3>
-            <button class="btn btn-ghost" id="clearSearchBtn">Limpiar búsqueda</button>
+            <h3>Catálogo de Productos</h3>
+            <div class="search-box">
+              <input type="text" id="searchInput" placeholder="Buscar por nombre, ID o categoría...">
+            </div>
           </div>
-          <div id="searchResults" class="search-results"></div>
-        </div>
-      </div>
 
-      <!-- ESTADÍSTICAS -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">Productos</span>
-          <span class="stat-value" id="totalProductos">0</span>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Categoría</th>
+                  <th>P. Compra</th>
+                  <th>P. Venta</th>
+                  <th>Margen</th>
+                  <th>Stock</th>
+                  <th class="text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="productTableBody">
+                <tr><td colspan="8" class="empty">No hay productos registrados</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Unidades en Stock</span>
-          <span class="stat-value" id="totalStock">0</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Valor del Inventario</span>
-          <span class="stat-value" id="valorInventario">$0</span>
-        </div>
-        <div class="stat-card highlight">
-          <span class="stat-label">Ganancias Totales</span>
-          <span class="stat-value" id="totalGanancias">$0</span>
-        </div>
-      </div>
+      </section>
 
-      <!-- RESUMEN MENSUAL -->
-      <div class="panel">
-        <h3>Resumen de Ventas del Mes</h3>
-        <div class="month-summary">
-          <div class="summary-item">
-            <span class="summary-label">Semana 1</span>
-            <span class="summary-value" id="week1Total">$0</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Semana 2</span>
-            <span class="summary-value" id="week2Total">$0</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Semana 3</span>
-            <span class="summary-value" id="week3Total">$0</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Semana 4</span>
-            <span class="summary-value" id="week4Total">$0</span>
-          </div>
-          <div class="summary-item total">
-            <span class="summary-label">Total del Mes</span>
-            <span class="summary-value" id="monthTotal">$0</span>
-          </div>
+      <!-- ==================== PESTAÑA: VENTAS ==================== -->
+      <section class="tab-content" id="tab-ventas">
+        <div class="section-header">
+          <h2>Registrar Venta</h2>
+          <p>Agrega productos al carrito y confirma la venta</p>
         </div>
-      </div>
 
-      <div class="two-columns">
+        <div class="panel form-panel">
+          <h3>Agregar Producto al Carrito</h3>
+          <div class="sale-grid">
+            <div class="field">
+              <label for="saleProductInput">Producto (ID o nombre) *</label>
+              <input type="text" id="saleProductInput" placeholder="Ej: 5 o 'Cuaderno Rivadavia'">
+            </div>
+            <div class="field">
+              <label for="saleCantidad">Cantidad *</label>
+              <input type="number" id="saleCantidad" min="1" value="1">
+            </div>
+            <div class="field field-button">
+              <button class="btn btn-primary" id="addToCartBtn">Agregar al carrito</button>
+            </div>
+          </div>
+          <p id="saleMessage" class="message"></p>
+        </div>
+
         <div class="panel">
-          <h3>Productos con Bajo Stock</h3>
-          <div id="lowStockList" class="low-stock-list">
-            <p class="empty-msg">Sin alertas de stock</p>
+          <div class="table-header">
+            <h3>Carrito de Venta</h3>
+            <button class="btn btn-ghost" id="clearCartBtn">Vaciar carrito</button>
           </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Precio Unit.</th>
+                  <th>Cantidad</th>
+                  <th>Subtotal</th>
+                  <th class="text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="cartBody">
+                <tr><td colspan="5" class="empty">Carrito vacío</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="cart-total">
+            <span>Total a pagar:</span>
+            <span id="cartTotal" class="cart-total-value">$0</span>
+          </div>
+          <button class="btn btn-primary btn-large" id="confirmSaleBtn">Confirmar Venta</button>
         </div>
+      </section>
+
+      <!-- ==================== PESTAÑA: HISTORIAL ==================== -->
+      <section class="tab-content" id="tab-historial">
+        <div class="section-header">
+          <h2>Historial de Ventas</h2>
+          <p>Registro completo de todas las ventas realizadas</p>
+        </div>
+
         <div class="panel">
-          <h3>Últimas Ventas</h3>
-          <div id="recentSalesList" class="recent-sales-list">
-            <p class="empty-msg">Sin ventas recientes</p>
+          <div class="table-header">
+            <h3>Registro de Operaciones</h3>
+            <button class="btn btn-ghost" id="clearHistoryBtn">Borrar Historial</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Total</th>
+                  <th>Ganancia</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr><td colspan="5" class="empty">Sin ventas registradas</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ==================== PESTAÑA: PRODUCTOS ==================== -->
-    <section class="tab-content" id="tab-productos">
-      <div class="section-header">
-        <h2>Gestión de Productos</h2>
-        <p>Administra el catálogo, precios y stock</p>
-      </div>
+      <!-- ==================== PESTAÑA: AJUSTES ==================== -->
+      <section class="tab-content" id="tab-ajustes">
+        <div class="section-header">
+          <h2>Ajustes del Sistema</h2>
+          <p>Respaldo, restauración y gestión de la cuenta</p>
+        </div>
 
-      <div class="panel form-panel">
-        <h3 id="formTitle">Agregar Nuevo Producto</h3>
-        <form id="productForm">
-          <input type="hidden" id="productId">
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="nombre">Nombre del Producto *</label>
-              <input type="text" id="nombre" required placeholder="Ej: Cuaderno Rivadavia A4">
-            </div>
-            <div class="field">
-              <label for="categoria">Categoría</label>
-              <input type="text" id="categoria" placeholder="Ej: Cuadernos, Libros, Papelería">
-            </div>
-            <div class="field">
-              <label for="precioCompra">Precio de Compra *</label>
-              <input type="number" id="precioCompra" step="0.01" min="0" required placeholder="0.00">
-            </div>
-            <div class="field">
-              <label for="precioVenta">Precio de Venta *</label>
-              <input type="number" id="precioVenta" step="0.01" min="0" required placeholder="0.00">
-            </div>
-            <div class="field">
-              <label for="stock">Cantidad en Stock *</label>
-              <input type="number" id="stock" min="0" required placeholder="0">
-            </div>
-          </div>
-
+        <div class="panel">
+          <h3>Respaldo de Datos</h3>
+          <p style="color:var(--text-soft); font-size:13.5px; margin-bottom:14px;">
+            Descarga un archivo con todos tus productos y ventas para guardarlo como respaldo.
+            Podés restaurarlo en esta u otra computadora.
+          </p>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="submitBtn">Agregar Producto</button>
-            <button type="button" class="btn btn-ghost" id="cancelBtn" style="display:none;">Cancelar</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="panel">
-        <div class="table-header">
-          <h3>Catálogo de Productos</h3>
-          <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Buscar por nombre, ID o categoría...">
+            <button class="btn btn-primary" id="exportBtn">Exportar datos (.json)</button>
+            <button class="btn btn-ghost" id="importBtn">Importar datos</button>
+            <input type="file" id="importFile" accept="application/json" style="display:none;">
           </div>
         </div>
 
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Categoría</th>
-                <th>P. Compra</th>
-                <th>P. Venta</th>
-                <th>Margen</th>
-                <th>Stock</th>
-                <th class="text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="productTableBody">
-              <tr><td colspan="8" class="empty">No hay productos registrados</td></tr>
-            </tbody>
-          </table>
+        <div class="panel">
+          <h3>Cambiar Contraseña</h3>
+          <form id="changePasswordForm">
+            <div class="form-grid">
+              <div class="field">
+                <label for="currentPass">Contraseña actual</label>
+                <input type="password" id="currentPass" required>
+              </div>
+              <div class="field">
+                <label for="newPass">Nueva contraseña</label>
+                <input type="password" id="newPass" required minlength="4">
+              </div>
+              <div class="field">
+                <label for="confirmPass">Confirmar nueva contraseña</label>
+                <input type="password" id="confirmPass" required minlength="4">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Cambiar contraseña</button>
+            <p id="passwordMessage" class="message"></p>
+          </form>
         </div>
-      </div>
-    </section>
 
-    <!-- ==================== PESTAÑA: VENTAS ==================== -->
-    <section class="tab-content" id="tab-ventas">
-      <div class="section-header">
-        <h2>Registrar Venta</h2>
-        <p>Agrega productos al carrito y confirma la venta</p>
-      </div>
-
-      <div class="panel form-panel">
-        <h3>Agregar Producto al Carrito</h3>
-        <div class="sale-grid">
-          <div class="field">
-            <label for="saleProductInput">Producto (ID o nombre) *</label>
-            <input type="text" id="saleProductInput" placeholder="Ej: 5 o 'Cuaderno Rivadavia'">
-          </div>
-          <div class="field">
-            <label for="saleCantidad">Cantidad *</label>
-            <input type="number" id="saleCantidad" min="1" value="1">
-          </div>
-          <div class="field field-button">
-            <button class="btn btn-primary" id="addToCartBtn">Agregar al carrito</button>
+        <div class="panel">
+          <h3>Zona de Peligro</h3>
+          <p style="color:var(--text-soft); font-size:13.5px; margin-bottom:14px;">
+            Estas acciones no se pueden deshacer. Asegurate de tener un respaldo antes de continuar.
+          </p>
+          <div class="form-actions">
+            <button class="btn btn-ghost" id="resetProductsBtn" style="color:var(--danger); border-color:var(--danger);">
+              Borrar todos los productos
+            </button>
+            <button class="btn btn-ghost" id="resetAllBtn" style="color:var(--danger); border-color:var(--danger);">
+              Borrar TODO (productos y ventas)
+            </button>
           </div>
         </div>
-        <p id="saleMessage" class="message"></p>
-      </div>
+      </section>
 
-      <div class="panel">
-        <div class="table-header">
-          <h3>Carrito de Venta</h3>
-          <button class="btn btn-ghost" id="clearCartBtn">Vaciar carrito</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Precio Unit.</th>
-                <th>Cantidad</th>
-                <th>Subtotal</th>
-                <th class="text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody id="cartBody">
-              <tr><td colspan="5" class="empty">Carrito vacío</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="cart-total">
-          <span>Total a pagar:</span>
-          <span id="cartTotal" class="cart-total-value">$0</span>
-        </div>
-        <button class="btn btn-primary btn-large" id="confirmSaleBtn">Confirmar Venta</button>
-      </div>
-    </section>
+    </main>
 
-    <!-- ==================== PESTAÑA: HISTORIAL ==================== -->
-    <section class="tab-content" id="tab-historial">
-      <div class="section-header">
-        <h2>Historial de Ventas</h2>
-        <p>Registro completo de todas las ventas realizadas</p>
-      </div>
+    <footer class="app-footer">
+      <p>Librería Santo Tomás &copy; <span id="currentYear"></span> — Sistema interno de gestión</p>
+    </footer>
 
-      <div class="panel">
-        <div class="table-header">
-          <h3>Registro de Operaciones</h3>
-          <button class="btn btn-ghost" id="clearHistoryBtn">Borrar Historial</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Total</th>
-                <th>Ganancia</th>
-              </tr>
-            </thead>
-            <tbody id="historyTableBody">
-              <tr><td colspan="5" class="empty">Sin ventas registradas</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <footer class="app-footer">
-    <p>Librería Santo Tomás &copy; <span id="currentYear"></span> — Sistema interno de gestión</p>
-  </footer>
+  </div>
 
   <script src="app.js"></script>
 </body>

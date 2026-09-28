@@ -1,29 +1,27 @@
 // ============================================================
-// CONFIGURACIÓN GOOGLE
+// CONFIGURACIÓN
 // ============================================================
-const GOOGLE_CLIENT_ID = '26724113942-m7d4lr66jaj4t0nncd0vup7rp6pke4f9.apps.googleusercontent.com';
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
-const DRIVE_FILE_NAME = 'libreria-datos.json';
-
-let googleAccessToken = null;
-let googleTokenClient = null;
-let driveFileId = null; // ID del archivo en Drive (cache)
+const CREDENTIALS_KEY = 'libreria_credentials';
+const SESSION_KEY = 'libreria_session';
+const PRODUCTOS_KEY = 'libreria_productos';
+const VENTAS_KEY = 'libreria_ventas';
 
 // ============================================================
 // ESTADO
 // ============================================================
-let productos = JSON.parse(localStorage.getItem('productos')) || [];
-let ventas = JSON.parse(localStorage.getItem('ventas')) || [];
+let productos = JSON.parse(localStorage.getItem(PRODUCTOS_KEY)) || [];
+let ventas = JSON.parse(localStorage.getItem(VENTAS_KEY)) || [];
 let carrito = [];
 let editandoId = null;
 let filtroCategoriaActiva = null;
+let usuarioActual = null;
 
 // ============================================================
 // UTILIDADES
 // ============================================================
-const guardarDatosLocal = () => {
-  localStorage.setItem('productos', JSON.stringify(productos));
-  localStorage.setItem('ventas', JSON.stringify(ventas));
+const guardarDatos = () => {
+  localStorage.setItem(PRODUCTOS_KEY, JSON.stringify(productos));
+  localStorage.setItem(VENTAS_KEY, JSON.stringify(ventas));
 };
 
 const formatearPrecio = (n) =>
@@ -43,188 +41,120 @@ const escaparHTML = (str) => {
   return div.innerHTML;
 };
 
-// Guardar todo (local + Drive si hay sesión)
-async function guardarTodo() {
-  guardarDatosLocal();
-  if (googleAccessToken) {
-    await subirADrive();
-  }
+// ============================================================
+// SISTEMA DE LOGIN LOCAL
+// ============================================================
+function getCredentials() {
+  return JSON.parse(localStorage.getItem(CREDENTIALS_KEY)) || null;
+}
+
+function setCredentials(user, pass) {
+  // Hash simple (no es criptográficamente seguro, pero suficiente para uso local)
+  const hash = btoa(user + '::' + pass);
+  localStorage.setItem(CREDENTIALS_KEY, JSON.stringify({ user, hash }));
+}
+
+function verificarCredenciales(user, pass) {
+  const cred = getCredentials();
+  if (!cred) return false;
+  const hash = btoa(user + '::' + pass);
+  return cred.user === user && cred.hash === hash;
+}
+
+function hayUsuarioRegistrado() {
+  return getCredentials() !== null;
+}
+
+function guardarSesion(user) {
+  sessionStorage.setItem(SESSION_KEY, user);
+}
+
+function getSesion() {
+  return sessionStorage.getItem(SESSION_KEY);
+}
+
+function cerrarSesion() {
+  sessionStorage.removeItem(SESSION_KEY);
+  usuarioActual = null;
+  mostrarLogin();
 }
 
 // ============================================================
-// GOOGLE DRIVE API (sin librerías externas)
+// PANTALLAS: LOGIN vs APP
 // ============================================================
-async function subirADrive() {
-  if (!googleAccessToken) return;
-
-  const contenido = JSON.stringify({ productos, ventas });
-
-  try {
-    // Si no tenemos el fileId, buscarlo
-    if (!driveFileId) {
-      driveFileId = await buscarArchivoDrive();
-    }
-
-    if (driveFileId) {
-      // Actualizar archivo existente
-      await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: contenido
-        }
-      );
-    } else {
-      // Crear archivo nuevo
-      const metadata = {
-        name: DRIVE_FILE_NAME,
-        parents: ['appDataFolder']
-      };
-
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', new Blob([contenido], { type: 'application/json' }));
-
-      const res = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${googleAccessToken}` },
-          body: form
-        }
-      );
-      const data = await res.json();
-      driveFileId = data.id;
-    }
-  } catch (e) {
-    console.error('Error subiendo a Drive:', e);
-  }
+function mostrarLogin() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appContainer').style.display = 'none';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').textContent = '';
+  setTimeout(() => document.getElementById('loginUser').focus(), 100);
 }
 
-async function buscarArchivoDrive() {
-  if (!googleAccessToken) return null;
-
-  try {
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id,name)`,
-      { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-    );
-    const data = await res.json();
-    if (data.files && data.files.length > 0) {
-      return data.files[0].id;
-    }
-  } catch (e) {
-    console.error('Error buscando archivo:', e);
-  }
-  return null;
+function mostrarApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appContainer').style.display = 'flex';
+  document.getElementById('userDisplay').textContent = usuarioActual || '';
+  renderTodo();
 }
 
-async function descargarDeDrive() {
-  if (!googleAccessToken) return false;
+// Login: submit
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errorEl = document.getElementById('loginError');
 
-  try {
-    const fileId = await buscarArchivoDrive();
-    if (!fileId) {
-      driveFileId = null;
-      return false;
-    }
-
-    driveFileId = fileId;
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-    );
-    const datos = await res.json();
-
-    productos = datos.productos || [];
-    ventas = datos.ventas || [];
-    guardarDatosLocal();
-    return true;
-  } catch (e) {
-    console.error('Error descargando de Drive:', e);
-    return false;
-  }
-}
-
-// ============================================================
-// INICIALIZACIÓN GOOGLE AUTH
-// ============================================================
-function initGoogleAuth() {
-  if (typeof google === 'undefined' || !google.accounts) {
-    // Reintentar cuando cargue la librería
-    setTimeout(initGoogleAuth, 300);
+  if (!hayUsuarioRegistrado()) {
+    errorEl.textContent = 'No hay usuario creado. Haz clic en "¿Primera vez? Crear cuenta".';
     return;
   }
 
-  googleTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: DRIVE_SCOPE,
-    callback: async (response) => {
-      if (response.error) {
-        console.error('Error de autorización:', response.error);
-        return;
-      }
-      googleAccessToken = response.access_token;
-
-      // Obtener información del usuario
-      try {
-        const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${googleAccessToken}` }
-        }).then(r => r.json());
-
-        document.getElementById('headerUser').style.display = 'flex';
-        document.getElementById('googleSignInBtn').style.display = 'none';
-        document.getElementById('userEmail').textContent = userInfo.email || 'Usuario';
-      } catch (e) {
-        console.error('Error obteniendo usuario:', e);
-      }
-
-      // Descargar datos desde Drive
-      const ok = await descargarDeDrive();
-      if (ok) {
-        renderTodo();
-        mostrarMensajeGlobal('Datos sincronizados desde Google Drive');
-      } else {
-        // Primera vez: subir los datos locales
-        await subirADrive();
-      }
-    }
-  });
-
-  // Mostrar botón si no hay sesión
-  if (!googleAccessToken) {
-    document.getElementById('googleSignInBtn').style.display = 'inline-flex';
-  }
-}
-
-// Botón iniciar sesión
-document.getElementById('googleSignInBtn').addEventListener('click', () => {
-  if (googleTokenClient) {
-    googleTokenClient.requestAccessToken({ prompt: '' });
+  if (verificarCredenciales(user, pass)) {
+    usuarioActual = user;
+    guardarSesion(user);
+    mostrarApp();
   } else {
-    alert('Google aún se está cargando, espera un momento e intenta de nuevo.');
+    errorEl.textContent = 'Usuario o contraseña incorrectos.';
   }
 });
 
-// Botón cerrar sesión
+// Configuración inicial
+document.getElementById('setupFirstTimeBtn').addEventListener('click', () => {
+  if (hayUsuarioRegistrado()) {
+    if (!confirm('Ya existe un usuario registrado. ¿Quieres crear uno nuevo? Esto reemplazará el actual.')) return;
+  }
+
+  const user = prompt('Elige un nombre de usuario (mínimo 3 caracteres):');
+  if (!user || user.trim().length < 3) {
+    alert('Usuario inválido.');
+    return;
+  }
+
+  const pass = prompt('Elige una contraseña (mínimo 4 caracteres):');
+  if (!pass || pass.length < 4) {
+    alert('Contraseña inválida.');
+    return;
+  }
+
+  const confirm = prompt('Confirma la contraseña:');
+  if (pass !== confirm) {
+    alert('Las contraseñas no coinciden.');
+    return;
+  }
+
+  setCredentials(user.trim(), pass);
+  alert('¡Usuario creado con éxito! Ahora puedes iniciar sesión.');
+  document.getElementById('loginUser').value = user.trim();
+  document.getElementById('loginUser').focus();
+});
+
+// Logout
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  if (googleAccessToken && google.accounts) {
-    google.accounts.oauth2.revoke(googleAccessToken);
+  if (confirm('¿Cerrar sesión?')) {
+    cerrarSesion();
   }
-  googleAccessToken = null;
-  driveFileId = null;
-  document.getElementById('headerUser').style.display = 'none';
-  document.getElementById('googleSignInBtn').style.display = 'inline-flex';
-  renderTodo();
 });
-
-function mostrarMensajeGlobal(texto) {
-  console.log('[Sistema]', texto);
-}
 
 // ============================================================
 // TABS
@@ -240,7 +170,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ============================================================
-// RENDER: PRODUCTOS (tabla)
+// RENDER: PRODUCTOS
 // ============================================================
 function renderProductos(filtro = '') {
   const tbody = document.getElementById('productTableBody');
@@ -298,7 +228,7 @@ function renderEstadisticas() {
 }
 
 // ============================================================
-// RENDER: LISTA BAJO STOCK
+// RENDER: BAJO STOCK
 // ============================================================
 function renderLowStock() {
   const cont = document.getElementById('lowStockList');
@@ -437,7 +367,7 @@ function renderTodo() {
 // ============================================================
 // CRUD PRODUCTOS
 // ============================================================
-document.getElementById('productForm').addEventListener('submit', async (e) => {
+document.getElementById('productForm').addEventListener('submit', (e) => {
   e.preventDefault();
 
   const nombre = document.getElementById('nombre').value.trim();
@@ -470,7 +400,7 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
     });
   }
 
-  await guardarTodo();
+  guardarDatos();
   renderTodo();
   e.target.reset();
 });
@@ -503,13 +433,13 @@ function cancelarEdicion() {
 
 document.getElementById('cancelBtn').addEventListener('click', cancelarEdicion);
 
-async function eliminarProducto(id) {
+function eliminarProducto(id) {
   const p = productos.find(p => p.id === id);
   if (!p) return;
   if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
 
   productos = productos.filter(p => p.id !== id);
-  await guardarTodo();
+  guardarDatos();
   renderTodo();
 }
 
@@ -569,11 +499,13 @@ function eliminarDelCarrito(index) {
 document.getElementById('addToCartBtn').addEventListener('click', agregarAlCarrito);
 
 document.getElementById('clearCartBtn').addEventListener('click', () => {
+  if (carrito.length === 0) return;
+  if (!confirm('¿Vaciar el carrito?')) return;
   carrito = [];
   renderCarrito();
 });
 
-document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
+document.getElementById('confirmSaleBtn').addEventListener('click', () => {
   if (carrito.length === 0) {
     mostrarMensaje('El carrito está vacío', 'error');
     return;
@@ -611,7 +543,7 @@ document.getElementById('confirmSaleBtn').addEventListener('click', async () => 
     totalVenta += total;
   });
 
-  await guardarTodo();
+  guardarDatos();
   carrito = [];
   renderCarrito();
   renderTodo();
@@ -838,10 +770,117 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 // ============================================================
 // HISTORIAL
 // ============================================================
-document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+document.getElementById('clearHistoryBtn').addEventListener('click', () => {
   if (!confirm('¿Borrar todo el historial de ventas? Las ganancias se reiniciarán.')) return;
   ventas = [];
-  await guardarTodo();
+  guardarDatos();
+  renderTodo();
+});
+
+// ============================================================
+// AJUSTES: EXPORTAR / IMPORTAR
+// ============================================================
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const datos = {
+    exportadoEl: new Date().toISOString(),
+    productos,
+    ventas
+  };
+  const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const hoy = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `libreria-santo-tomas-${hoy}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const datos = JSON.parse(event.target.result);
+      if (!datos.productos || !Array.isArray(datos.productos)) {
+        alert('El archivo no tiene el formato correcto.');
+        return;
+      }
+
+      if (!confirm('Esto reemplazará los datos actuales. ¿Continuar?')) return;
+
+      productos = datos.productos || [];
+      ventas = datos.ventas || [];
+      guardarDatos();
+      renderTodo();
+      alert('Datos importados con éxito.');
+    } catch (err) {
+      alert('Error al leer el archivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ============================================================
+// AJUSTES: CAMBIAR CONTRASEÑA
+// ============================================================
+document.getElementById('changePasswordForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const actual = document.getElementById('currentPass').value;
+  const nueva = document.getElementById('newPass').value;
+  const confirmar = document.getElementById('confirmPass').value;
+  const msg = document.getElementById('passwordMessage');
+
+  if (!verificarCredenciales(usuarioActual, actual)) {
+    msg.textContent = 'La contraseña actual es incorrecta.';
+    msg.className = 'message error';
+    return;
+  }
+
+  if (nueva !== confirmar) {
+    msg.textContent = 'Las contraseñas nuevas no coinciden.';
+    msg.className = 'message error';
+    return;
+  }
+
+  if (nueva.length < 4) {
+    msg.textContent = 'La contraseña debe tener al menos 4 caracteres.';
+    msg.className = 'message error';
+    return;
+  }
+
+  setCredentials(usuarioActual, nueva);
+  msg.textContent = 'Contraseña cambiada con éxito.';
+  msg.className = 'message success';
+  e.target.reset();
+  setTimeout(() => { msg.className = 'message'; }, 4000);
+});
+
+// ============================================================
+// AJUSTES: BORRAR DATOS
+// ============================================================
+document.getElementById('resetProductsBtn').addEventListener('click', () => {
+  if (!confirm('¿Borrar TODOS los productos? Esta acción no se puede deshacer.')) return;
+  if (!confirm('¿Estás completamente seguro? Se perderán todos los productos.')) return;
+  productos = [];
+  guardarDatos();
+  renderTodo();
+});
+
+document.getElementById('resetAllBtn').addEventListener('click', () => {
+  if (!confirm('¿Borrar TODO (productos y ventas)? Esta acción no se puede deshacer.')) return;
+  if (!confirm('¿Estás completamente seguro? Se perderá toda la información.')) return;
+  productos = [];
+  ventas = [];
+  carrito = [];
+  guardarDatos();
   renderTodo();
 });
 
@@ -855,10 +894,14 @@ function init() {
   });
   document.getElementById('currentYear').textContent = hoy.getFullYear();
 
-  renderTodo();
-
-  // Iniciar Google Auth
-  initGoogleAuth();
+  // Verificar si hay sesión guardada
+  const sesion = getSesion();
+  if (sesion && hayUsuarioRegistrado()) {
+    usuarioActual = sesion;
+    mostrarApp();
+  } else {
+    mostrarLogin();
+  }
 }
 
 init();
