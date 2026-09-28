@@ -1,10 +1,27 @@
-// ==================== ESTADO ====================
+// ============================================================
+// CONFIGURACIÓN GOOGLE
+// ============================================================
+const GOOGLE_CLIENT_ID = '26724113942-m7d4lr66jaj4t0nncd0vup7rp6pke4f9.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_FILE_NAME = 'libreria-datos.json';
+
+let googleAccessToken = null;
+let googleTokenClient = null;
+let driveFileId = null; // ID del archivo en Drive (cache)
+
+// ============================================================
+// ESTADO
+// ============================================================
 let productos = JSON.parse(localStorage.getItem('productos')) || [];
 let ventas = JSON.parse(localStorage.getItem('ventas')) || [];
+let carrito = [];
 let editandoId = null;
+let filtroCategoriaActiva = null;
 
-// ==================== UTILIDADES ====================
-const guardarDatos = () => {
+// ============================================================
+// UTILIDADES
+// ============================================================
+const guardarDatosLocal = () => {
   localStorage.setItem('productos', JSON.stringify(productos));
   localStorage.setItem('ventas', JSON.stringify(ventas));
 };
@@ -26,7 +43,192 @@ const escaparHTML = (str) => {
   return div.innerHTML;
 };
 
-// ==================== TABS ====================
+// Guardar todo (local + Drive si hay sesión)
+async function guardarTodo() {
+  guardarDatosLocal();
+  if (googleAccessToken) {
+    await subirADrive();
+  }
+}
+
+// ============================================================
+// GOOGLE DRIVE API (sin librerías externas)
+// ============================================================
+async function subirADrive() {
+  if (!googleAccessToken) return;
+
+  const contenido = JSON.stringify({ productos, ventas });
+
+  try {
+    // Si no tenemos el fileId, buscarlo
+    if (!driveFileId) {
+      driveFileId = await buscarArchivoDrive();
+    }
+
+    if (driveFileId) {
+      // Actualizar archivo existente
+      await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: contenido
+        }
+      );
+    } else {
+      // Crear archivo nuevo
+      const metadata = {
+        name: DRIVE_FILE_NAME,
+        parents: ['appDataFolder']
+      };
+
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([contenido], { type: 'application/json' }));
+
+      const res = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${googleAccessToken}` },
+          body: form
+        }
+      );
+      const data = await res.json();
+      driveFileId = data.id;
+    }
+  } catch (e) {
+    console.error('Error subiendo a Drive:', e);
+  }
+}
+
+async function buscarArchivoDrive() {
+  if (!googleAccessToken) return null;
+
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id,name)`,
+      { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+    );
+    const data = await res.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+  } catch (e) {
+    console.error('Error buscando archivo:', e);
+  }
+  return null;
+}
+
+async function descargarDeDrive() {
+  if (!googleAccessToken) return false;
+
+  try {
+    const fileId = await buscarArchivoDrive();
+    if (!fileId) {
+      driveFileId = null;
+      return false;
+    }
+
+    driveFileId = fileId;
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+    );
+    const datos = await res.json();
+
+    productos = datos.productos || [];
+    ventas = datos.ventas || [];
+    guardarDatosLocal();
+    return true;
+  } catch (e) {
+    console.error('Error descargando de Drive:', e);
+    return false;
+  }
+}
+
+// ============================================================
+// INICIALIZACIÓN GOOGLE AUTH
+// ============================================================
+function initGoogleAuth() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    // Reintentar cuando cargue la librería
+    setTimeout(initGoogleAuth, 300);
+    return;
+  }
+
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (response) => {
+      if (response.error) {
+        console.error('Error de autorización:', response.error);
+        return;
+      }
+      googleAccessToken = response.access_token;
+
+      // Obtener información del usuario
+      try {
+        const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${googleAccessToken}` }
+        }).then(r => r.json());
+
+        document.getElementById('headerUser').style.display = 'flex';
+        document.getElementById('googleSignInBtn').style.display = 'none';
+        document.getElementById('userEmail').textContent = userInfo.email || 'Usuario';
+      } catch (e) {
+        console.error('Error obteniendo usuario:', e);
+      }
+
+      // Descargar datos desde Drive
+      const ok = await descargarDeDrive();
+      if (ok) {
+        renderTodo();
+        mostrarMensajeGlobal('Datos sincronizados desde Google Drive');
+      } else {
+        // Primera vez: subir los datos locales
+        await subirADrive();
+      }
+    }
+  });
+
+  // Mostrar botón si no hay sesión
+  if (!googleAccessToken) {
+    document.getElementById('googleSignInBtn').style.display = 'inline-flex';
+  }
+}
+
+// Botón iniciar sesión
+document.getElementById('googleSignInBtn').addEventListener('click', () => {
+  if (googleTokenClient) {
+    googleTokenClient.requestAccessToken({ prompt: '' });
+  } else {
+    alert('Google aún se está cargando, espera un momento e intenta de nuevo.');
+  }
+});
+
+// Botón cerrar sesión
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (googleAccessToken && google.accounts) {
+    google.accounts.oauth2.revoke(googleAccessToken);
+  }
+  googleAccessToken = null;
+  driveFileId = null;
+  document.getElementById('headerUser').style.display = 'none';
+  document.getElementById('googleSignInBtn').style.display = 'inline-flex';
+  renderTodo();
+});
+
+function mostrarMensajeGlobal(texto) {
+  console.log('[Sistema]', texto);
+}
+
+// ============================================================
+// TABS
+// ============================================================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -37,7 +239,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-// ==================== RENDER: PRODUCTOS ====================
+// ============================================================
+// RENDER: PRODUCTOS (tabla)
+// ============================================================
 function renderProductos(filtro = '') {
   const tbody = document.getElementById('productTableBody');
   const texto = filtro.toLowerCase().trim();
@@ -79,29 +283,9 @@ function renderProductos(filtro = '') {
   }).join('');
 }
 
-// ==================== RENDER: TABLA DE VENTAS ====================
-function renderSaleProducts() {
-  const tbody = document.getElementById('saleProductsBody');
-
-  if (productos.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay productos registrados</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = productos.map(p => `
-    <tr>
-      <td><strong>#${p.id}</strong></td>
-      <td>${escaparHTML(p.nombre)}</td>
-      <td>${formatearPrecio(p.precioVenta)}</td>
-      <td class="${p.stock <= 5 ? 'stock-bajo' : ''}">${p.stock}</td>
-      <td class="text-right">
-        <button class="action-btn sell-btn" onclick="venderProducto(${p.id})">Vender</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-// ==================== RENDER: ESTADÍSTICAS ====================
+// ============================================================
+// RENDER: ESTADÍSTICAS
+// ============================================================
 function renderEstadisticas() {
   const totalStock = productos.reduce((s, p) => s + Number(p.stock), 0);
   const valorInventario = productos.reduce((s, p) => s + p.precioCompra * p.stock, 0);
@@ -113,7 +297,9 @@ function renderEstadisticas() {
   document.getElementById('totalGanancias').textContent = formatearPrecio(ganancias);
 }
 
-// ==================== RENDER: LISTA BAJO STOCK ====================
+// ============================================================
+// RENDER: LISTA BAJO STOCK
+// ============================================================
 function renderLowStock() {
   const cont = document.getElementById('lowStockList');
   const bajos = productos.filter(p => p.stock <= 5).sort((a, b) => a.stock - b.stock);
@@ -131,7 +317,9 @@ function renderLowStock() {
   `).join('');
 }
 
-// ==================== RENDER: ÚLTIMAS VENTAS ====================
+// ============================================================
+// RENDER: ÚLTIMAS VENTAS
+// ============================================================
 function renderRecentSales() {
   const cont = document.getElementById('recentSalesList');
   const ultimas = ventas.slice(-5).reverse();
@@ -149,7 +337,9 @@ function renderRecentSales() {
   `).join('');
 }
 
-// ==================== RENDER: HISTORIAL ====================
+// ============================================================
+// RENDER: HISTORIAL
+// ============================================================
 function renderHistorial() {
   const tbody = document.getElementById('historyTableBody');
 
@@ -169,18 +359,85 @@ function renderHistorial() {
   `).join('');
 }
 
+// ============================================================
+// RENDER: RESUMEN MENSUAL
+// ============================================================
+function renderResumenMensual() {
+  const ahora = new Date();
+  const mesActual = ahora.getMonth();
+  const anioActual = ahora.getFullYear();
+
+  const ventasMes = ventas.filter(v => {
+    const fecha = new Date(v.fechaOriginal || v.fecha);
+    return fecha.getMonth() === mesActual && fecha.getFullYear() === anioActual;
+  });
+
+  const semanas = [0, 0, 0, 0];
+
+  ventasMes.forEach(v => {
+    const fecha = new Date(v.fechaOriginal || v.fecha);
+    const dia = fecha.getDate();
+    const semana = Math.min(Math.floor((dia - 1) / 7), 3);
+    semanas[semana] += v.total;
+  });
+
+  const totalMes = semanas.reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`week${i + 1}Total`);
+    if (el) el.textContent = formatearPrecio(semanas[i]);
+  }
+
+  const monthEl = document.getElementById('monthTotal');
+  if (monthEl) monthEl.textContent = formatearPrecio(totalMes);
+}
+
+// ============================================================
+// RENDER: CARRITO
+// ============================================================
+function renderCarrito() {
+  const tbody = document.getElementById('cartBody');
+
+  if (carrito.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Carrito vacío</td></tr>';
+    document.getElementById('cartTotal').textContent = '$0';
+    return;
+  }
+
+  tbody.innerHTML = carrito.map((item, index) => `
+    <tr>
+      <td>${escaparHTML(item.nombre)}</td>
+      <td>${formatearPrecio(item.precioVenta)}</td>
+      <td>${item.cantidad}</td>
+      <td>${formatearPrecio(item.precioVenta * item.cantidad)}</td>
+      <td class="text-right">
+        <button class="action-btn delete-btn" onclick="eliminarDelCarrito(${index})">Eliminar</button>
+      </td>
+    </tr>
+  `).join('');
+
+  const total = carrito.reduce((sum, item) => sum + (item.precioVenta * item.cantidad), 0);
+  document.getElementById('cartTotal').textContent = formatearPrecio(total);
+}
+
+// ============================================================
+// RENDER GENERAL
+// ============================================================
 function renderTodo() {
   renderProductos(document.getElementById('searchInput').value);
-  renderSaleProducts();
   renderEstadisticas();
   renderLowStock();
   renderRecentSales();
   renderHistorial();
+  renderResumenMensual();
   renderCategoryChips();
+  renderCarrito();
 }
 
-// ==================== CRUD PRODUCTOS ====================
-document.getElementById('productForm').addEventListener('submit', (e) => {
+// ============================================================
+// CRUD PRODUCTOS
+// ============================================================
+document.getElementById('productForm').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const nombre = document.getElementById('nombre').value.trim();
@@ -213,7 +470,7 @@ document.getElementById('productForm').addEventListener('submit', (e) => {
     });
   }
 
-  guardarDatos();
+  await guardarTodo();
   renderTodo();
   e.target.reset();
 });
@@ -246,33 +503,25 @@ function cancelarEdicion() {
 
 document.getElementById('cancelBtn').addEventListener('click', cancelarEdicion);
 
-function eliminarProducto(id) {
+async function eliminarProducto(id) {
   const p = productos.find(p => p.id === id);
   if (!p) return;
   if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
 
   productos = productos.filter(p => p.id !== id);
-  guardarDatos();
+  await guardarTodo();
   renderTodo();
 }
 
-// ==================== VENTAS ====================
-function venderProducto(id) {
-  // Cambiar a la pestaña de ventas
-  document.querySelector('.tab-btn[data-tab="ventas"]').click();
-  document.getElementById('saleProductInput').value = id;
-  document.getElementById('saleCantidad').value = 1;
-  document.getElementById('saleProductInput').focus();
-}
-
-document.getElementById('saleForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-
+// ============================================================
+// CARRITO
+// ============================================================
+function agregarAlCarrito() {
   const input = document.getElementById('saleProductInput').value.trim().toLowerCase();
   const cantidad = parseInt(document.getElementById('saleCantidad').value);
 
   if (!input || !cantidad || cantidad < 1) {
-    mostrarMensaje('Completa todos los campos correctamente', 'error');
+    mostrarMensaje('Completa todos los campos', 'error');
     return;
   }
 
@@ -281,35 +530,92 @@ document.getElementById('saleForm').addEventListener('submit', (e) => {
   );
 
   if (!producto) {
-    mostrarMensaje('Producto no encontrado. Verifica el ID o nombre.', 'error');
+    mostrarMensaje('Producto no encontrado', 'error');
     return;
   }
 
-  if (producto.stock < cantidad) {
-    mostrarMensaje(`Stock insuficiente. Solo hay ${producto.stock} unidades disponibles.`, 'error');
+  const enCarrito = carrito.filter(i => i.id === producto.id)
+    .reduce((sum, i) => sum + i.cantidad, 0);
+
+  if (producto.stock < enCarrito + cantidad) {
+    mostrarMensaje(`Stock insuficiente. Disponible: ${producto.stock - enCarrito}`, 'error');
     return;
   }
 
-  const total = producto.precioVenta * cantidad;
-  const ganancia = (producto.precioVenta - producto.precioCompra) * cantidad;
-
-  ventas.push({
-    fecha: new Date().toLocaleString('es-AR'),
-    producto: producto.nombre,
-    productoId: producto.id,
-    cantidad,
-    total,
-    ganancia
-  });
-
-  producto.stock -= cantidad;
-
-  guardarDatos();
-  renderTodo();
+  const existente = carrito.find(i => i.id === producto.id);
+  if (existente) {
+    existente.cantidad += cantidad;
+  } else {
+    carrito.push({
+      id: producto.id,
+      nombre: producto.nombre,
+      precioVenta: producto.precioVenta,
+      precioCompra: producto.precioCompra,
+      cantidad
+    });
+  }
 
   document.getElementById('saleProductInput').value = '';
   document.getElementById('saleCantidad').value = 1;
-  mostrarMensaje(`Venta registrada: ${cantidad} × ${producto.nombre} — Ganancia: ${formatearPrecio(ganancia)}`, 'success');
+  renderCarrito();
+  mostrarMensaje(`Agregado: ${producto.nombre} ×${cantidad}`, 'success');
+}
+
+function eliminarDelCarrito(index) {
+  carrito.splice(index, 1);
+  renderCarrito();
+}
+
+document.getElementById('addToCartBtn').addEventListener('click', agregarAlCarrito);
+
+document.getElementById('clearCartBtn').addEventListener('click', () => {
+  carrito = [];
+  renderCarrito();
+});
+
+document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
+  if (carrito.length === 0) {
+    mostrarMensaje('El carrito está vacío', 'error');
+    return;
+  }
+
+  for (const item of carrito) {
+    const producto = productos.find(p => p.id === item.id);
+    if (producto.stock < item.cantidad) {
+      mostrarMensaje(`Stock insuficiente para ${item.nombre}`, 'error');
+      return;
+    }
+  }
+
+  const fecha = new Date();
+  let gananciaTotal = 0;
+  let totalVenta = 0;
+
+  carrito.forEach(item => {
+    const producto = productos.find(p => p.id === item.id);
+    const total = item.precioVenta * item.cantidad;
+    const ganancia = (item.precioVenta - item.precioCompra) * item.cantidad;
+
+    ventas.push({
+      fecha: fecha.toLocaleString('es-AR'),
+      fechaOriginal: fecha.toISOString(),
+      producto: item.nombre,
+      productoId: item.id,
+      cantidad: item.cantidad,
+      total,
+      ganancia
+    });
+
+    producto.stock -= item.cantidad;
+    gananciaTotal += ganancia;
+    totalVenta += total;
+  });
+
+  await guardarTodo();
+  carrito = [];
+  renderCarrito();
+  renderTodo();
+  mostrarMensaje(`Venta confirmada. Total: ${formatearPrecio(totalVenta)} — Ganancia: ${formatearPrecio(gananciaTotal)}`, 'success');
 });
 
 function mostrarMensaje(texto, tipo) {
@@ -319,32 +625,24 @@ function mostrarMensaje(texto, tipo) {
   setTimeout(() => { msg.className = 'message'; }, 4000);
 }
 
-// ==================== BUSCADOR ====================
-document.getElementById('searchInput').addEventListener('input', (e) => {
-  renderProductos(e.target.value);
-});
-
-// ==================== HISTORIAL ====================
-document.getElementById('clearHistoryBtn').addEventListener('click', () => {
-  if (!confirm('¿Borrar todo el historial de ventas? Las ganancias se reiniciarán.')) return;
-  ventas = [];
-  guardarDatos();
-  renderTodo();
-});
-
-// ==================== INICIALIZACIÓN ====================
-function init() {
-  // Fecha en header
-  const hoy = new Date();
-  document.getElementById('headerDate').textContent = hoy.toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  });
-  document.getElementById('currentYear').textContent = hoy.getFullYear();
-
-  renderTodo();
+// ============================================================
+// VENDER DESDE OTRAS PESTAÑAS
+// ============================================================
+function venderProducto(id) {
+  document.querySelector('.tab-btn[data-tab="ventas"]').click();
+  document.getElementById('saleProductInput').value = id;
+  document.getElementById('saleCantidad').value = 1;
+  setTimeout(() => document.getElementById('saleProductInput').focus(), 100);
 }
 
-// ==================== BUSCADOR DEL PANEL ====================
+function irAEditarProducto(id) {
+  document.querySelector('.tab-btn[data-tab="productos"]').click();
+  setTimeout(() => editarProducto(id), 100);
+}
+
+// ============================================================
+// BUSCADOR DEL PANEL
+// ============================================================
 const panelSearchInput = document.getElementById('panelSearchInput');
 const panelSearchClear = document.getElementById('panelSearchClear');
 const searchResultsWrapper = document.getElementById('searchResultsWrapper');
@@ -352,9 +650,6 @@ const searchResults = document.getElementById('searchResults');
 const searchResultsTitle = document.getElementById('searchResultsTitle');
 const categoryChips = document.getElementById('categoryChips');
 
-let filtroCategoriaActiva = null;
-
-// Render de chips de categorías
 function renderCategoryChips() {
   const categorias = [...new Set(
     productos
@@ -367,7 +662,6 @@ function renderCategoryChips() {
     return;
   }
 
-  // Prefijo "Todas" + categorías
   const todasActivo = filtroCategoriaActiva === null ? 'active' : '';
   let html = `
     <button class="chip ${todasActivo}" data-categoria="">
@@ -387,7 +681,6 @@ function renderCategoryChips() {
 
   categoryChips.innerHTML = html;
 
-  // Listeners de chips
   categoryChips.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const cat = chip.dataset.categoria;
@@ -398,7 +691,6 @@ function renderCategoryChips() {
   });
 }
 
-// Buscar productos según texto y categoría activa
 function buscarProductos(texto, categoria) {
   const t = texto.toLowerCase().trim();
   return productos.filter(p => {
@@ -415,11 +707,25 @@ function buscarProductos(texto, categoria) {
   });
 }
 
-// Render de una tarjeta de resultado
 function tarjetaResultado(p) {
   const margen = p.precioVenta - p.precioCompra;
   const margenClass = margen >= 0 ? 'margen-positivo' : 'margen-negativo';
   const stockClass = p.stock <= 5 ? 'stock-bajo' : '';
+
+  const vendidas = ventas
+    .filter(v => v.productoId === p.id)
+    .reduce((sum, v) => sum + v.cantidad, 0);
+
+  const totalDisponible = vendidas + p.stock;
+  const porcentajeVenta = totalDisponible > 0
+    ? Math.round((vendidas / totalDisponible) * 100)
+    : 0;
+
+  const hitos = [30, 50, 70, 80, 90, 100];
+  const hitosHTML = hitos.map(h => {
+    const alcanzado = porcentajeVenta >= h;
+    return `<span class="hito ${alcanzado ? 'alcanzado' : ''}">${h}%</span>`;
+  }).join('');
 
   return `
     <div class="result-card">
@@ -430,21 +736,25 @@ function tarjetaResultado(p) {
       ${p.categoria ? `<span class="result-category">${escaparHTML(p.categoria)}</span>` : ''}
       <div class="result-details">
         <div class="result-detail">
-          <span class="result-detail-label">P. Compra</span>
-          <span class="result-detail-value">${formatearPrecio(p.precioCompra)}</span>
-        </div>
-        <div class="result-detail">
           <span class="result-detail-label">P. Venta</span>
           <span class="result-detail-value">${formatearPrecio(p.precioVenta)}</span>
-        </div>
-        <div class="result-detail">
-          <span class="result-detail-label">Margen</span>
-          <span class="result-detail-value ${margenClass}">${formatearPrecio(margen)}</span>
         </div>
         <div class="result-detail">
           <span class="result-detail-label">Stock</span>
           <span class="result-detail-value ${stockClass}">${p.stock} u.</span>
         </div>
+        <div class="result-detail">
+          <span class="result-detail-label">Vendidas</span>
+          <span class="result-detail-value">${vendidas} u.</span>
+        </div>
+        <div class="result-detail">
+          <span class="result-detail-label">% Venta</span>
+          <span class="result-detail-value">${porcentajeVenta}%</span>
+        </div>
+      </div>
+      <div class="hitos-container">
+        <div class="hitos-label">Progreso de venta:</div>
+        <div class="hitos">${hitosHTML}</div>
       </div>
       <div class="result-actions">
         <button class="action-btn sell-btn" onclick="venderProducto(${p.id})">Vender</button>
@@ -454,20 +764,17 @@ function tarjetaResultado(p) {
   `;
 }
 
-// Ejecuta la búsqueda y renderiza resultados
 function ejecutarBusquedaPanel() {
   const texto = panelSearchInput.value;
   const hayTexto = texto.trim() !== '';
   const hayCategoria = filtroCategoriaActiva !== null;
 
-  // Mostrar/ocultar botón limpiar
   if (hayTexto) {
     panelSearchClear.classList.add('visible');
   } else {
     panelSearchClear.classList.remove('visible');
   }
 
-  // Si no hay búsqueda ni categoría activa, ocultar resultados
   if (!hayTexto && !hayCategoria) {
     searchResultsWrapper.style.display = 'none';
     return;
@@ -476,15 +783,13 @@ function ejecutarBusquedaPanel() {
   const resultados = buscarProductos(texto, filtroCategoriaActiva);
   searchResultsWrapper.style.display = 'block';
 
-  // Título
   const partes = [];
   if (hayTexto) partes.push(`"${escaparHTML(texto)}"`);
   if (hayCategoria) partes.push(`categoría "${escaparHTML(filtroCategoriaActiva)}"`);
 
-  searchResultsTitle.textContent = 
+  searchResultsTitle.textContent =
     `${resultados.length} resultado${resultados.length !== 1 ? 's' : ''} ${partes.length ? 'para ' + partes.join(' en ') : ''}`;
 
-  // Render
   if (resultados.length === 0) {
     searchResults.innerHTML = `
       <div class="search-empty" style="grid-column: 1 / -1;">
@@ -498,13 +803,6 @@ function ejecutarBusquedaPanel() {
   }
 }
 
-// Ir a la pestaña Productos y activar edición
-function irAEditarProducto(id) {
-  document.querySelector('.tab-btn[data-tab="productos"]').click();
-  setTimeout(() => editarProducto(id), 100);
-}
-
-// Event listeners del buscador del panel
 panelSearchInput.addEventListener('input', ejecutarBusquedaPanel);
 panelSearchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -529,5 +827,38 @@ document.getElementById('clearSearchBtn').addEventListener('click', () => {
   renderCategoryChips();
   ejecutarBusquedaPanel();
 });
+
+// ============================================================
+// BUSCADOR DE PRODUCTOS
+// ============================================================
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  renderProductos(e.target.value);
+});
+
+// ============================================================
+// HISTORIAL
+// ============================================================
+document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+  if (!confirm('¿Borrar todo el historial de ventas? Las ganancias se reiniciarán.')) return;
+  ventas = [];
+  await guardarTodo();
+  renderTodo();
+});
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+function init() {
+  const hoy = new Date();
+  document.getElementById('headerDate').textContent = hoy.toLocaleDateString('es-AR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+  document.getElementById('currentYear').textContent = hoy.getFullYear();
+
+  renderTodo();
+
+  // Iniciar Google Auth
+  initGoogleAuth();
+}
 
 init();

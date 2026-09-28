@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Librería Santo Tomás | Sistema de Gestión</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -18,7 +19,16 @@
           <span>Sistema de Gestión</span>
         </div>
       </div>
-      <div class="header-date" id="headerDate"></div>
+      <div class="header-right">
+        <div class="header-date" id="headerDate"></div>
+        <div class="header-user" id="headerUser" style="display:none;">
+          <span class="user-email" id="userEmail"></span>
+          <button id="logoutBtn" class="btn btn-ghost btn-sm">Cerrar sesión</button>
+        </div>
+        <button id="googleSignInBtn" class="btn btn-primary btn-sm" style="display:none;">
+          Iniciar sesión con Google
+        </button>
+      </div>
     </div>
   </header>
 
@@ -40,79 +50,104 @@
 
   <main class="app-main">
 
-   <!-- ==================== PESTAÑA: PANEL ==================== -->
-<section class="tab-content active" id="tab-dashboard">
-  <div class="section-header">
-    <h2>Panel Principal</h2>
-    <p>Busca productos y revisa el estado general de tu librería</p>
-  </div>
-
-  <!-- BUSCADOR PRINCIPAL -->
-  <div class="panel search-panel">
-    <div class="search-hero">
-      <div class="search-input-wrapper">
-        <span class="search-icon">⌕</span>
-        <input 
-          type="text" 
-          id="panelSearchInput" 
-          placeholder="Buscar por nombre, ID o categoría..."
-          autocomplete="off"
-        >
-        <button type="button" class="search-clear" id="panelSearchClear" title="Limpiar">×</button>
+    <!-- ==================== PESTAÑA: PANEL ==================== -->
+    <section class="tab-content active" id="tab-dashboard">
+      <div class="section-header">
+        <h2>Panel Principal</h2>
+        <p>Busca productos y revisa el estado general de tu librería</p>
       </div>
-      <div class="search-hint">Presiona <kbd>Enter</kbd> para ver todos los resultados</div>
-    </div>
 
-    <!-- Chips de categorías -->
-    <div class="category-chips" id="categoryChips"></div>
-  </div>
-
-  <!-- RESULTADOS DE BÚSQUEDA -->
-  <div id="searchResultsWrapper" style="display:none;">
-    <div class="panel">
-      <div class="table-header">
-        <h3 id="searchResultsTitle">Resultados</h3>
-        <button class="btn btn-ghost" id="clearSearchBtn">Limpiar búsqueda</button>
+      <!-- BUSCADOR PRINCIPAL -->
+      <div class="panel search-panel">
+        <div class="search-hero">
+          <div class="search-input-wrapper">
+            <span class="search-icon">⌕</span>
+            <input
+              type="text"
+              id="panelSearchInput"
+              placeholder="Buscar por nombre, ID o categoría..."
+              autocomplete="off"
+            >
+            <button type="button" class="search-clear" id="panelSearchClear" title="Limpiar">×</button>
+          </div>
+          <div class="search-hint">Presiona <kbd>Esc</kbd> para limpiar la búsqueda</div>
+        </div>
+        <div class="category-chips" id="categoryChips"></div>
       </div>
-      <div id="searchResults" class="search-results"></div>
-    </div>
-  </div>
 
-  <!-- ESTADÍSTICAS -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <span class="stat-label">Productos</span>
-      <span class="stat-value" id="totalProductos">0</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Unidades en Stock</span>
-      <span class="stat-value" id="totalStock">0</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Valor del Inventario</span>
-      <span class="stat-value" id="valorInventario">$0</span>
-    </div>
-    <div class="stat-card highlight">
-      <span class="stat-label">Ganancias Totales</span>
-      <span class="stat-value" id="totalGanancias">$0</span>
-    </div>
-  </div>
+      <!-- RESULTADOS DE BÚSQUEDA -->
+      <div id="searchResultsWrapper" style="display:none;">
+        <div class="panel">
+          <div class="table-header">
+            <h3 id="searchResultsTitle">Resultados</h3>
+            <button class="btn btn-ghost" id="clearSearchBtn">Limpiar búsqueda</button>
+          </div>
+          <div id="searchResults" class="search-results"></div>
+        </div>
+      </div>
 
-  <div class="two-columns">
-    <div class="panel">
-      <h3>Productos con Bajo Stock</h3>
-      <div id="lowStockList" class="low-stock-list">
-        <p class="empty-msg">Sin alertas de stock</p>
+      <!-- ESTADÍSTICAS -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Productos</span>
+          <span class="stat-value" id="totalProductos">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Unidades en Stock</span>
+          <span class="stat-value" id="totalStock">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Valor del Inventario</span>
+          <span class="stat-value" id="valorInventario">$0</span>
+        </div>
+        <div class="stat-card highlight">
+          <span class="stat-label">Ganancias Totales</span>
+          <span class="stat-value" id="totalGanancias">$0</span>
+        </div>
       </div>
-    </div>
-    <div class="panel">
-      <h3>Últimas Ventas</h3>
-      <div id="recentSalesList" class="recent-sales-list">
-        <p class="empty-msg">Sin ventas recientes</p>
+
+      <!-- RESUMEN MENSUAL -->
+      <div class="panel">
+        <h3>Resumen de Ventas del Mes</h3>
+        <div class="month-summary">
+          <div class="summary-item">
+            <span class="summary-label">Semana 1</span>
+            <span class="summary-value" id="week1Total">$0</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Semana 2</span>
+            <span class="summary-value" id="week2Total">$0</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Semana 3</span>
+            <span class="summary-value" id="week3Total">$0</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Semana 4</span>
+            <span class="summary-value" id="week4Total">$0</span>
+          </div>
+          <div class="summary-item total">
+            <span class="summary-label">Total del Mes</span>
+            <span class="summary-value" id="monthTotal">$0</span>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-</section>
+
+      <div class="two-columns">
+        <div class="panel">
+          <h3>Productos con Bajo Stock</h3>
+          <div id="lowStockList" class="low-stock-list">
+            <p class="empty-msg">Sin alertas de stock</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Últimas Ventas</h3>
+          <div id="recentSalesList" class="recent-sales-list">
+            <p class="empty-msg">Sin ventas recientes</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ==================== PESTAÑA: PRODUCTOS ==================== -->
     <section class="tab-content" id="tab-productos">
@@ -121,12 +156,11 @@
         <p>Administra el catálogo, precios y stock</p>
       </div>
 
-      <!-- Formulario -->
       <div class="panel form-panel">
         <h3 id="formTitle">Agregar Nuevo Producto</h3>
         <form id="productForm">
           <input type="hidden" id="productId">
-          
+
           <div class="form-grid">
             <div class="field">
               <label for="nombre">Nombre del Producto *</label>
@@ -157,7 +191,6 @@
         </form>
       </div>
 
-      <!-- Buscador -->
       <div class="panel">
         <div class="table-header">
           <h3>Catálogo de Productos</h3>
@@ -192,46 +225,53 @@
     <section class="tab-content" id="tab-ventas">
       <div class="section-header">
         <h2>Registrar Venta</h2>
-        <p>Ingresa el producto vendido para descontar del stock</p>
+        <p>Agrega productos al carrito y confirma la venta</p>
       </div>
 
       <div class="panel form-panel">
-        <form id="saleForm">
-          <div class="form-grid sale-grid">
-            <div class="field">
-              <label for="saleProductInput">Producto (ID o nombre) *</label>
-              <input type="text" id="saleProductInput" placeholder="Ej: 5 o 'Cuaderno Rivadavia'">
-            </div>
-            <div class="field">
-              <label for="saleCantidad">Cantidad *</label>
-              <input type="number" id="saleCantidad" min="1" value="1">
-            </div>
+        <h3>Agregar Producto al Carrito</h3>
+        <div class="sale-grid">
+          <div class="field">
+            <label for="saleProductInput">Producto (ID o nombre) *</label>
+            <input type="text" id="saleProductInput" placeholder="Ej: 5 o 'Cuaderno Rivadavia'">
           </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Registrar Venta</button>
+          <div class="field">
+            <label for="saleCantidad">Cantidad *</label>
+            <input type="number" id="saleCantidad" min="1" value="1">
           </div>
-        </form>
+          <div class="field field-button">
+            <button class="btn btn-primary" id="addToCartBtn">Agregar al carrito</button>
+          </div>
+        </div>
         <p id="saleMessage" class="message"></p>
       </div>
 
       <div class="panel">
-        <h3>Productos Disponibles</h3>
+        <div class="table-header">
+          <h3>Carrito de Venta</h3>
+          <button class="btn btn-ghost" id="clearCartBtn">Vaciar carrito</button>
+        </div>
         <div class="table-container">
           <table>
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Producto</th>
-                <th>Precio Venta</th>
-                <th>Stock</th>
+                <th>Precio Unit.</th>
+                <th>Cantidad</th>
+                <th>Subtotal</th>
                 <th class="text-right">Acción</th>
               </tr>
             </thead>
-            <tbody id="saleProductsBody">
-              <tr><td colspan="5" class="empty">No hay productos registrados</td></tr>
+            <tbody id="cartBody">
+              <tr><td colspan="5" class="empty">Carrito vacío</td></tr>
             </tbody>
           </table>
         </div>
+        <div class="cart-total">
+          <span>Total a pagar:</span>
+          <span id="cartTotal" class="cart-total-value">$0</span>
+        </div>
+        <button class="btn btn-primary btn-large" id="confirmSaleBtn">Confirmar Venta</button>
       </div>
     </section>
 
