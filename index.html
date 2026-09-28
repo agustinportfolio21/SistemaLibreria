@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Librería Santo Tomás | Sistema de Gestión</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ENCABEZADO -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="brand">
+        <div class="brand-logo">ST</div>
+        <div class="brand-text">
+          <h1>Librería Santo Tomás</h1>
+          <span>Sistema de Gestión</span>
+        </div>
+      </div>
+      <div class="header-date" id="headerDate"></div>
+    </div>
+  </header>
+
+  <!-- NAVEGACIÓN POR PESTAÑAS -->
+  <nav class="tabs-nav">
+    <button class="tab-btn active" data-tab="dashboard">
+      <span class="tab-icon">▦</span> Panel
+    </button>
+    <button class="tab-btn" data-tab="productos">
+      <span class="tab-icon">▤</span> Productos
+    </button>
+    <button class="tab-btn" data-tab="ventas">
+      <span class="tab-icon">▸</span> Ventas
+    </button>
+    <button class="tab-btn" data-tab="historial">
+      <span class="tab-icon">◷</span> Historial
+    </button>
+  </nav>
+
+  <main class="app-main">
+
+   <!-- ==================== PESTAÑA: PANEL ==================== -->
+<section class="tab-content active" id="tab-dashboard">
+  <div class="section-header">
+    <h2>Panel Principal</h2>
+    <p>Busca productos y revisa el estado general de tu librería</p>
+  </div>
+
+  <!-- BUSCADOR PRINCIPAL -->
+  <div class="panel search-panel">
+    <div class="search-hero">
+      <div class="search-input-wrapper">
+        <span class="search-icon">⌕</span>
+        <input 
+          type="text" 
+          id="panelSearchInput" 
+          placeholder="Buscar por nombre, ID o categoría..."
+          autocomplete="off"
+        >
+        <button type="button" class="search-clear" id="panelSearchClear" title="Limpiar">×</button>
+      </div>
+      <div class="search-hint">Presiona <kbd>Enter</kbd> para ver todos los resultados</div>
+    </div>
+
+    <!-- Chips de categorías -->
+    <div class="category-chips" id="categoryChips"></div>
+  </div>
+
+  <!-- RESULTADOS DE BÚSQUEDA -->
+  <div id="searchResultsWrapper" style="display:none;">
+    <div class="panel">
+      <div class="table-header">
+        <h3 id="searchResultsTitle">Resultados</h3>
+        <button class="btn btn-ghost" id="clearSearchBtn">Limpiar búsqueda</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ESTADÍSTICAS -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Productos</span>
+      <span class="stat-value" id="totalProductos">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Unidades en Stock</span>
+      <span class="stat-value" id="totalStock">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Valor del Inventario</span>
+      <span class="stat-value" id="valorInventario">$0</span>
+    </div>
+    <div class="stat-card highlight">
+      <span class="stat-label">Ganancias Totales</span>
+      <span class="stat-value" id="totalGanancias">$0</span>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="panel">
+      <h3>Productos con Bajo Stock</h3>
+      <div id="lowStockList" class="low-stock-list">
+        <p class="empty-msg">Sin alertas de stock</p>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Últimas Ventas</h3>
+      <div id="recentSalesList" class="recent-sales-list">
+        <p class="empty-msg">Sin ventas recientes</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+    <!-- ==================== PESTAÑA: PRODUCTOS ==================== -->
+    <section class="tab-content" id="tab-productos">
+      <div class="section-header">
+        <h2>Gestión de Productos</h2>
+        <p>Administra el catálogo, precios y stock</p>
+      </div>
+
+      <!-- Formulario -->
+      <div class="panel form-panel">
+        <h3 id="formTitle">Agregar Nuevo Producto</h3>
+        <form id="productForm">
+          <input type="hidden" id="productId">
+          
+          <div class="form-grid">
+            <div class="field">
+              <label for="nombre">Nombre del Producto *</label>
+              <input type="text" id="nombre" required placeholder="Ej: Cuaderno Rivadavia A4">
+            </div>
+            <div class="field">
+              <label for="categoria">Categoría</label>
+              <input type="text" id="categoria" placeholder="Ej: Cuadernos, Libros, Papelería">
+            </div>
+            <div class="field">
+              <label for="precioCompra">Precio de Compra *</label>
+              <input type="number" id="precioCompra" step="0.01" min="0" required placeholder="0.00">
+            </div>
+            <div class="field">
+              <label for="precioVenta">Precio de Venta *</label>
+              <input type="number" id="precioVenta" step="0.01" min="0" required placeholder="0.00">
+            </div>
+            <div class="field">
+              <label for="stock">Cantidad en Stock *</label>
+              <input type="number" id="stock" min="0" required placeholder="0">
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submitBtn">Agregar Producto</button>
+            <button type="button" class="btn btn-ghost" id="cancelBtn" style="display:none;">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Buscador -->
+      <div class="panel">
+        <div class="table-header">
+          <h3>Catálogo de Productos</h3>
+          <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Buscar por nombre, ID o categoría...">
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Categoría</th>
+                <th>P. Compra</th>
+                <th>P. Venta</th>
+                <th>Margen</th>
+                <th>Stock</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="productTableBody">
+              <tr><td colspan="8" class="empty">No hay productos registrados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PESTAÑA: VENTAS ==================== -->
+    <section class="tab-content" id="tab-ventas">
+      <div class="section-header">
+        <h2>Registrar Venta</h2>
+        <p>Ingresa el producto vendido para descontar del stock</p>
+      </div>
+
+      <div class="panel form-panel">
+        <form id="saleForm">
+          <div class="form-grid sale-grid">
+            <div class="field">
+              <label for="saleProductInput">Producto (ID o nombre) *</label>
+              <input type="text" id="saleProductInput" placeholder="Ej: 5 o 'Cuaderno Rivadavia'">
+            </div>
+            <div class="field">
+              <label for="saleCantidad">Cantidad *</label>
+              <input type="number" id="saleCantidad" min="1" value="1">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Registrar Venta</button>
+          </div>
+        </form>
+        <p id="saleMessage" class="message"></p>
+      </div>
+
+      <div class="panel">
+        <h3>Productos Disponibles</h3>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Producto</th>
+                <th>Precio Venta</th>
+                <th>Stock</th>
+                <th class="text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="saleProductsBody">
+              <tr><td colspan="5" class="empty">No hay productos registrados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PESTAÑA: HISTORIAL ==================== -->
+    <section class="tab-content" id="tab-historial">
+      <div class="section-header">
+        <h2>Historial de Ventas</h2>
+        <p>Registro completo de todas las ventas realizadas</p>
+      </div>
+
+      <div class="panel">
+        <div class="table-header">
+          <h3>Registro de Operaciones</h3>
+          <button class="btn btn-ghost" id="clearHistoryBtn">Borrar Historial</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Total</th>
+                <th>Ganancia</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="5" class="empty">Sin ventas registradas</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Librería Santo Tomás &copy; <span id="currentYear"></span> — Sistema interno de gestión</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
